@@ -16,3 +16,5 @@ langchain-text-splitters
 # Groq
 langchain-groq
 groq
+
+matplotlib
