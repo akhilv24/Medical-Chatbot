@@ -34,36 +34,43 @@ import streamlit as st
 import pandas as pd
 import speech_recognition as sr
 from datetime import datetime
+
+# --- LangChain (NEW API) ---
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from langchain.chains import LLMChain
-from langchain.memory import ConversationBufferMemory
+from langchain_core.output_parsers import StrOutputParser
+
 import json
 from pathlib import Path
+
 from medicine_info import load_medicine_data, fetch_medicine_info
 from health_dashboard import show_health_dashboard 
 from medicine_reminder import add_reminder, get_due_reminders, clear_all_reminders, play_reminder_audio
 
 
-# Load environment variables
+
+#       ENV + MODEL SETUP
 load_dotenv()
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# Initialize the LLM
 llm = ChatGroq(model_name="llama-3.1-8b-instant")
 
-# Load medicine dataset
+# Medicine dataset
 medicine_df = load_medicine_data()
 
-# Setup prompt + memory
+# Prompt (NEW LangChain format)
 prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are Medic-Bot, a friendly and knowledgeable medical assistant. Always talk in a simple, clear way. Remember what the user asked before."),
+    ("system", 
+     "You are Medic-Bot, a friendly and knowledgeable medical assistant. "
+     "Always talk in a simple, clear way."),
     ("human", "{question}")
 ])
-memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
-chain = LLMChain(llm=llm, prompt=prompt, memory=memory)
 
-# Voice input
+# New Chain (Runnable Pipeline)
+chain = prompt | llm | StrOutputParser()
+
+
+#       VOICE INPUT
 def listen():
     r = sr.Recognizer()
     with sr.Microphone() as source:
@@ -76,14 +83,14 @@ def listen():
     except sr.RequestError:
         return "Voice service is unavailable."
 
-# Save chat history
+
+#      SAVE + LOAD CHATS
 def save_chat(chat_history):
     timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     Path("chats").mkdir(exist_ok=True)
     with open(f"chats/chat_{timestamp}.json", "w") as f:
         json.dump(chat_history, f, indent=4)
 
-# Load previous chats
 def load_saved_chats():
     Path("chats").mkdir(exist_ok=True)
     files = list(Path("chats").glob("chat_*.json"))
@@ -92,19 +99,17 @@ def load_saved_chats():
 def load_chat(file_path):
     with open(file_path, "r") as f:
         return json.load(f)
-    
-# Layout: image + title side by side
-col1, col2 = st.columns([1, 5])  # Adjust proportions as needed
 
+
+#          UI LAYOUT
+st.set_page_config(page_title="Medic-Bot", layout="centered")
+
+col1, col2 = st.columns([1, 5])
 with col1:
-    st.image("assets/chatbot.png", width=200)  # Logo on the left
-    
+    st.image("assets/chatbot.png", width=200)
 with col2:
     st.markdown("<h1 style='padding-top: 8px;'>Medic-Bot — AI Health Assistant</h1>", unsafe_allow_html=True)
 
-
-# ---------------- UI ---------------- #
-st.set_page_config(page_title="Medic-Bot", layout="centered")
 st.markdown("I'm here to help you with your health-related queries.")
 
 # Suggested prompts
@@ -119,19 +124,20 @@ with col2:
 with col3:
     if st.button("Tips for healthy heart"):
         st.session_state.spoken_input = "Tips for maintaining a healthy heart"
-        
-# --- Reminder UI ---
+
+
+#     MEDICINE REMINDER UI
 with st.expander(" Set a Medicine Reminder"):
     med_name = st.text_input("Medicine Name")
     dosage = st.text_input("Dosage (e.g., 1 tablet)")
     time_input = st.time_input("Reminder Time")
-    
+
     col1, col2 = st.columns(2)
     with col1:
         if st.button("Add Reminder!!!"):
             if med_name and dosage:
                 add_reminder(med_name, time_input.strftime("%H:%M"), dosage)
-                st.success(f"Reminder set for **{med_name}** at ⏰ {time_input.strftime('%H:%M')}")
+                st.success(f"Reminder set for **{med_name}** at {time_input.strftime('%H:%M')}")
             else:
                 st.error("Please fill all fields.")
 
@@ -140,13 +146,15 @@ with st.expander(" Set a Medicine Reminder"):
             clear_all_reminders()
             st.warning("All reminders cleared.")
 
-# Session states
+
+#     SESSION STATE SETUP
 if "spoken_input" not in st.session_state:
     st.session_state.spoken_input = ""
 if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "last_medicine_reply" not in st.session_state:
     st.session_state.last_medicine_reply = ""
+
 
 # Sidebar for saved chats
 with st.sidebar:
@@ -159,33 +167,33 @@ with st.sidebar:
         st.session_state.chat_history = loaded_chat
         st.success(f"Loaded: {selected_chat}")
 
-# Inside your sidebar or main layout
+# Sidebar Features
 page = st.sidebar.selectbox("Choose Feature", ["Chat", "Medicine Info", "Health Stats Dashboard"])
 
-if page == "Chat":
-    # your chatbot logic
-    pass
-elif page == "Medicine Info":
-    # your medicine info logic
-    pass
-elif page == "Health Stats Dashboard":
+if page == "Health Stats Dashboard":
     show_health_dashboard()
 
-# Input boxes
-user_input = st.text_input(" Ask your medical question:", value=st.session_state.spoken_input, key="main_input")
 
-# Voice & Submit
+#       INPUT SECTION
+user_input = st.text_input(
+    " Ask your medical question:",
+    value=st.session_state.spoken_input,
+    key="main_input"
+)
+
 col_voice, col_submit = st.columns([1, 2])
+
 with col_voice:
     if st.button(" Speak"):
         spoken = listen()
         st.session_state.spoken_input = spoken
         st.success(f"You said: {spoken}")
+
 with col_submit:
-    if st.button(" Get Answer", key="llm_answer"):
+    if st.button(" Get Answer"):
         final = user_input.strip()
         if final:
-            response = chain.run({"question": final})
+            response = chain.invoke({"question": final})
             st.session_state.chat_history.append(("You", final))
             st.session_state.chat_history.append(("Medic-Bot", response))
             st.session_state.spoken_input = ""
@@ -194,20 +202,22 @@ with col_submit:
         else:
             st.warning("Please enter or speak something first.")
 
-# Medicine Info button
+
+#      MEDICINE INFO BUTTON
 if st.button(" Medicine Info"):
     query = st.session_state.get("spoken_input") or user_input
     if query.strip():
         med_info = fetch_medicine_info(medicine_df, query)
-        st.image("medi.png", width=50)  # adjust width as needed
-        st.markdown(med_info)# <-- Fixed argument order
+        st.image("medi.png", width=50)
+        st.markdown(med_info)
+
         if med_info:
             st.session_state.last_medicine_reply = med_info
             st.session_state.chat_history.append(("You", query))
             st.session_state.chat_history.append(("Medic-Bot", med_info))
-            st.success(" Found medicine info")
+            st.success("Found medicine info")
         else:
-            fallback = chain.run({"question": query})
+            fallback = chain.invoke({"question": query})
             st.session_state.last_medicine_reply = fallback
             st.session_state.chat_history.append(("You", query))
             st.session_state.chat_history.append(("Medic-Bot", fallback))
@@ -215,7 +225,8 @@ if st.button(" Medicine Info"):
     else:
         st.warning("Please provide a query first.")
 
-# Display last medicine info
+
+#     DISPLAY LAST MED INFO
 if st.session_state.last_medicine_reply:
     st.divider()
     st.markdown(
@@ -224,14 +235,20 @@ if st.session_state.last_medicine_reply:
         unsafe_allow_html=True
     )
 
-# Chat history display
+
+#     CHAT HISTORY DISPLAY
 if st.session_state.chat_history:
     st.divider()
-if st.session_state.chat_history:
 
     for role, msg in reversed(st.session_state.chat_history):
         if role == "You":
-            st.markdown(f"<div style='color:#E1E1E1;padding:8px;border-radius:10px;background:#1f2937;margin-bottom:5px;'><b>You:</b> {msg}</div>", unsafe_allow_html=True)
-        elif role == "Medic-Bot":
+            st.markdown(
+                f"<div style='color:#E1E1E1;padding:8px;border-radius:10px;background:#1f2937;margin-bottom:5px;'><b>You:</b> {msg}</div>",
+                unsafe_allow_html=True
+            )
+        else:
             if msg != st.session_state.last_medicine_reply:
-                st.markdown(f"<div style='color:#CDE6D0;padding:8px;border-radius:10px;background:#111827;margin-bottom:5px;'><b>Medic-Bot:</b> {msg}</div>", unsafe_allow_html=True)
+                st.markdown(
+                    f"<div style='color:#CDE6D0;padding:8px;border-radius:10px;background:#111827;margin-bottom:5px;'><b>Medic-Bot:</b> {msg}</div>",
+                    unsafe_allow_html=True
+                )
