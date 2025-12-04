@@ -35,7 +35,7 @@ import pandas as pd
 import speech_recognition as sr
 from datetime import datetime
 from langchain_groq import ChatGroq
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.chains import LLMChain
 from langchain.memory import ConversationBufferMemory
 import json

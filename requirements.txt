@@ -4,6 +4,10 @@ langchain-huggingface
 python-dotenv
 streamlit 
 langchain_groq
+langchain-core
+langchain-community
+openai
+pydantic
 SpeechRecognition
 pdfplumber
 gtts
