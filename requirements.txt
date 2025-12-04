@@ -1,16 +1,18 @@
-langchain
-langchain-community
-langchain-huggingface 
+streamlit
 python-dotenv
-streamlit 
-langchain_groq
-langchain-core
-langchain-community
-openai
-pydantic
+pandas
 SpeechRecognition
 pdfplumber
-gtts
 PyPDF2
-pandas
+gtts
 pyttsx3
+
+# LangChain ecosystem
+langchain
+langchain-core
+langchain-community
+langchain-text-splitters
+
+# Groq
+langchain-groq
+groq
